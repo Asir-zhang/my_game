@@ -1,32 +1,35 @@
 package game.auction;
 
-import tools.Log;
 import tools.TimeTools;
+
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 竞拍品
  */
 public class AuctionItem {
     // id
-    long id;
+    private long id;
     // 创建者
-    long creatorId;
+    private long creatorId;
     // 初始价格
-    double initialPrice;
+    private double initialPrice;
     // 是否可以一口价
-    boolean canFixed;
+    private boolean canFixed;
     // 一口价
-    double fixedPrice;
+    private double fixedPrice;
     // 当前竞价
-    double currentPrice;
+    private double currentPrice;
     // 创建时间
-    long createTime;
+    private long createTime;
     // 最新一次竞价时间
-    long lastBidTime;
+    private long lastBidTime;
     // 最新的竞价者
-    long lastBidderId;
+    private long lastBidderId;
     // 竞拍品内容
-    String item = "通用竞拍奖励";
+    private String item = "通用竞拍奖励";
+
+    public ReentrantLock lock = new ReentrantLock();
 
 
     private AuctionItem(long id, long creatorId, double initialPrice, boolean canFixed,
@@ -47,26 +50,9 @@ public class AuctionItem {
      * 创建竞拍品
      */
     public static AuctionItem createAuctionItem(long id, long creatorId, double initialPrice, boolean canFixed, double fixedPrice, String item) {
-        if (canFixed && fixedPrice <= initialPrice) {
-            Log.error("初始价格大于等于了一口价价格,初始价格={}", initialPrice);
-            return null;
-        }
-
         return new AuctionItem(id, creatorId, initialPrice, canFixed, fixedPrice, initialPrice,
                 TimeTools.getCurTime(), -1L, -1L, item);
     }
-
-    /**
-     * 可以创建竞拍品
-     */
-    public static boolean canCreateAucItem(long playerId, long creatorId, double initialPrice, boolean canFixed, double fixedPrice, String item) {
-        if (canFixed && fixedPrice <= initialPrice) {
-            Log.error("初始价格大于等于了一口价价格,初始价格={}", initialPrice);
-            return false;
-        }
-        return true;
-    }
-
 
     public long getId() {
         return id;
