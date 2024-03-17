@@ -35,4 +35,12 @@ public class HumanObject {
     public void sendMsg(Object msg) {
 
     }
+
+    public boolean hasMoney(double price) {
+        return true;
+    }
+
+    public long getMoney() {
+        return 1000L;
+    }
 }

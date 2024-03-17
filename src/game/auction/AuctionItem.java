@@ -2,6 +2,8 @@ package game.auction;
 
 import tools.TimeTools;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -28,6 +30,10 @@ public class AuctionItem {
     private long lastBidderId;
     // 竞拍品内容
     private String item = "通用竞拍奖励";
+    // 竞拍是否完成
+    private boolean isFinished = false;
+    // 历史参与的竞拍者
+    public List<Long> historyBidder = new ArrayList<>();
 
     public ReentrantLock lock = new ReentrantLock();
 
@@ -134,4 +140,12 @@ public class AuctionItem {
         this.canFixed = tf;
     }
 
+
+    public boolean isFinished() {
+        return isFinished;
+    }
+
+    public void setFinished(boolean finished) {
+        isFinished = finished;
+    }
 }
