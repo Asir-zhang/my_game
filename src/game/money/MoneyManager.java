@@ -53,7 +53,7 @@ public class MoneyManager {
             // 通过邮件等归还钱
 
 
-            // 移除货币暂存区的钱
+            // 移除暂存区的钱
             removeMoneyCache(id, type, cacheId);
 
             // 日志输出
@@ -62,7 +62,7 @@ public class MoneyManager {
     }
 
     /**
-     * 移除货币暂存区的钱
+     * 移除暂存区的钱
      */
     public void removeMoneyCache(long playerId, ReduceType type, long cacheId) {
         switch (type) {

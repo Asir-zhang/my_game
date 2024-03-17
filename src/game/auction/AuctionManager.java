@@ -76,7 +76,7 @@ public class AuctionManager {
      * 能否创建
      */
     public boolean canCreateAuction(HumanObject humanObj, double initialPrice, boolean canFixed, double fixedPrice, String item) {
-        // 基础信息检验，不涉及玩家信息的，无需考虑并发问题
+        // 基础信息检验
         if (canFixed && fixedPrice <= initialPrice) {
             Log.error("初始价格大于等于了一口价价格,初始价格={}", initialPrice);
             return false;
