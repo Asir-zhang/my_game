@@ -1,10 +1,7 @@
 package game.auction;
 
 import game.money.MoneyManager;
-import tools.IdApplicator;
-import tools.Log;
-import tools.TimeTools;
-import tools.Timer;
+import tools.*;
 
 import java.util.List;
 import java.util.Map;
@@ -41,11 +38,11 @@ public class AuctionManager {
                 try {
                     // 设置为已经完成
                     item.setFinished(true);
-                    // 开启结算
-                    settlementAuction(item);
                 } finally {
                     item.lock.unlock();
                 }
+                // 开启结算
+                settlementAuction(item);
             }
         }
 
@@ -99,38 +96,48 @@ public class AuctionManager {
         AuctionItem auctionItem = auctionMap.get(auctionId);
         if (auctionItem == null) {
             Log.error("不存在此竞拍品, auctionId={}", auctionId);
+            humanObj.sendMsg(ReasonResult.failure("不存在此竞拍品, auctionId={}", auctionId));
             return;
         }
 
         auctionItem.lock.lock();
+        boolean isChange = false;       // 是否真的修改了
+        ReasonResult result = ReasonResult.SUCCESS;
         try {
             // 校验
             if (price <= auctionItem.getCurrentPrice()) {
                 Log.error("出价过低, price={}", price);
-                return;
+                result = ReasonResult.failure("出价过低, price={}", price);
             }
 
             if (humanObj.getId() == auctionItem.getCreatorId()) {
                 Log.error("自己不能参与竞拍");
-                return;
+                result = ReasonResult.failure("自己不能参与竞拍");
             }
 
             long now = TimeTools.getCurTime();
             if (auctionItem.isFinished() || isExpired(auctionItem)) {
                 Log.error("该商品竞拍已经结束");
-                return;
+                result = ReasonResult.failure("该商品竞拍已经结束");
             }
 
             if (fixed && price < auctionItem.getFixedPrice()) {
                 Log.error("一口价价格过低");
-                return;
+                result = ReasonResult.failure("一口价价格过低");
             }
 
-            if (!humanObj.hasMoney(price)) {
+            // 这一步放在最后，因为下面不仅会检查钱还会扣钱
+            if (!humanObj.hasMoneyAndReduce(price)) {
                 Log.error("玩家货币不足,curMoney={}", humanObj.getMoney());
+                result = ReasonResult.failure("玩家货币不足,curMoney={}", humanObj.getMoney());
+            }
+
+            if (!result.result) {
+                humanObj.sendMsg(result.getReason());
                 return;
             }
 
+            isChange = true;
             // 检验通过，玩家金额前往暂存区，使用auctionId当作cacheId
             moneyManager.addMoneyCache(humanObj, price, MoneyManager.ReduceType.Auction, auctionId);
 
@@ -146,8 +153,6 @@ public class AuctionManager {
             if (fixed) {
                 // 一口价，那么直接结束竞拍
                 auctionItem.setFinished(true);
-                // 直接开启结算
-                settlementAuction(auctionItem);
             }
             // 日志输出
             Log.info("玩家：{}参与竞拍，竞拍物品={}，竞拍价格={}", humanObj.getId(), auctionId, price);
@@ -155,6 +160,16 @@ public class AuctionManager {
             Log.error("竞拍失败");
         } finally {
             auctionItem.lock.unlock();
+        }
+
+        if (auctionItem.isFinished()) {
+            // 开启结算
+            settlementAuction(auctionItem);
+        }
+
+        if (isChange) {
+            // 已经变化，发送给客户端
+            humanObj.sendMsg(auctionItem.toString());
         }
     }
 
@@ -178,13 +193,13 @@ public class AuctionManager {
         // 调用其他模块发放奖励
 
 
-        // 移除暂存区的钱
+        // 移除竞拍成功者货币暂存区的记录
         moneyManager.removeMoneyCache(auctionItem.getLastBidderId(), MoneyManager.ReduceType.Auction, auctionItem.getId());
 
-        // 归还暂存区的钱
+        // 归还失败者，包括成功者之前的暂存区的钱
         moneyManager.repayMoneyCache(auctionItem.historyBidder, MoneyManager.ReduceType.Auction, auctionItem.getId());
 
-        // 移除缓存
+        // 移除竞拍品缓存
         auctionMap.remove(auctionItem.getId());
 
         // 日志输出

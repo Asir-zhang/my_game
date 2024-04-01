@@ -36,7 +36,11 @@ public class HumanObject {
 
     }
 
-    public boolean hasMoney(double price) {
+    /**
+     * 拥有指定的货币并且减去
+     * @return true：拥有并且已经成功减去；false：未拥有或者未成功减去
+     * */
+    public boolean hasMoneyAndReduce(double price) {
         return true;
     }
 

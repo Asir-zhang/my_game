@@ -25,8 +25,6 @@ public class MoneyManager {
      * 添加暂存区缓存
      */
     public void addMoneyCache(HumanObject humanObj, double price, ReduceType type, long caCheId) {
-        // 先减少金额
-        reduceMoney(humanObj, price);
 
         MoneyCacheItem cacheItem = new MoneyCacheItem(humanObj.getId(), price, caCheId);
         switch (type) {
