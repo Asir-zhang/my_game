@@ -8,11 +8,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-/**
- * 前提：
- * <p>1.涉及到玩家自身的信息都是单线程的</p>
- */
-
 public class AuctionManager {
     // 2min过期
     public static final int EXPIRE_TIME = 2 * 60 * 1000;
@@ -26,10 +21,11 @@ public class AuctionManager {
     private final Timer timer = new Timer(this::AuctionTimerTask);
 
     public void init() {
-        timer.runWithFixedDelay(2, TimeUnit.MINUTES);   //  定时任务执行
+        timer.runWithFixedDelay(2, TimeUnit.SECONDS);   //  定时任务执行
     }
 
     public void AuctionTimerTask() {
+        System.out.println("开始检查");
         // 遍历检查所有竞拍品是否可以开启结算
         for (AuctionItem item : auctionMap.values()) {
             if (isExpired(item)) {
@@ -101,8 +97,7 @@ public class AuctionManager {
         }
 
         auctionItem.lock.lock();
-        boolean isChange = false;       // 是否真的修改了
-        ReasonResult result = ReasonResult.SUCCESS;
+        ReasonResult result = ReasonResult.failure("");
         try {
             // 校验
             if (price <= auctionItem.getCurrentPrice()) {
@@ -137,7 +132,7 @@ public class AuctionManager {
                 return;
             }
 
-            isChange = true;
+            result = ReasonResult.SUCCESS;
             // 检验通过，玩家金额前往暂存区，使用auctionId当作cacheId
             moneyManager.addMoneyCache(humanObj, price, MoneyManager.ReduceType.Auction, auctionId);
 
@@ -167,8 +162,8 @@ public class AuctionManager {
             settlementAuction(auctionItem);
         }
 
-        if (isChange) {
-            // 已经变化，发送给客户端
+        if (result.result) {
+            // 竞价成功，发送给客户端
             humanObj.sendMsg(auctionItem.toString());
         }
     }
@@ -177,6 +172,10 @@ public class AuctionManager {
      * 竞拍结算
      */
     private void settlementAuction(AuctionItem auctionItem) {
+        if (auctionItem == null) {
+            return;
+        }
+
         if (!auctionItem.isFinished()) {
             return;
         }
