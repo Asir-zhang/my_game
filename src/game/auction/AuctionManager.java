@@ -3,6 +3,7 @@ package game.auction;
 import game.money.MoneyManager;
 import tools.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,6 +27,7 @@ public class AuctionManager {
 
     public void AuctionTimerTask() {
         System.out.println("开始检查");
+        List<AuctionItem> canSettlement = new ArrayList<>();
         // 遍历检查所有竞拍品是否可以开启结算
         for (AuctionItem item : auctionMap.values()) {
             if (isExpired(item)) {
@@ -37,11 +39,14 @@ public class AuctionManager {
                 } finally {
                     item.lock.unlock();
                 }
-                // 开启结算
-                settlementAuction(item);
+                canSettlement.add(item);
             }
         }
 
+        // 开启结算
+        for (AuctionItem item : canSettlement) {
+            settlementAuction(item);
+        }
     }
 
     /**
