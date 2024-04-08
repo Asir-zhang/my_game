@@ -1,3 +1,4 @@
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -25,6 +26,7 @@ public class Run {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
 
+        ConcurrentLinkedQueue<Integer> queue = new ConcurrentLinkedQueue<>();
+    }
 }

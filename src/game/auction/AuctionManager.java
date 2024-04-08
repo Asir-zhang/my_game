@@ -19,13 +19,13 @@ public class AuctionManager {
     // 存放所有竞拍品
     Map<Long, AuctionItem> auctionMap = new ConcurrentHashMap<>();
 
-    private final Timer timer = new Timer(this::AuctionTimerTask);
+    private final Timer timer = new Timer(this::auctionTimerTask);
 
     public void init() {
         timer.runWithFixedDelay(2, TimeUnit.SECONDS);   //  定时任务执行
     }
 
-    public void AuctionTimerTask() {
+    public void auctionTimerTask() {
         System.out.println("开始检查");
         List<AuctionItem> canSettlement = new ArrayList<>();
         // 遍历检查所有竞拍品是否可以开启结算
@@ -146,7 +146,7 @@ public class AuctionManager {
             auctionItem.setCurrentPrice(price);
             // 添加历史竞拍者。同一个玩家可以重复竞拍，但是金额是每次都扣
             if (auctionItem.getLastBidderId() > 0) {
-                auctionItem.historyBidder.add(auctionItem.getLastBidderId());
+                auctionItem.bidderHistory.add(auctionItem.getLastBidderId());
             }
             auctionItem.setLastBidderId(humanObj.getId());
 
@@ -185,6 +185,17 @@ public class AuctionManager {
             return;
         }
 
+        auctionItem.lock.lock();
+        try{
+            if (auctionItem.isClosed()) {
+                return;
+            }
+
+            auctionItem.setClosed(true);
+        } finally {
+            auctionItem.lock.unlock();
+        }
+
         if (auctionItem.getLastBidderId() <= 0) {
             // 表示无人竞拍，归还物品给竞拍创建者
 
@@ -201,7 +212,7 @@ public class AuctionManager {
         moneyManager.removeMoneyCache(auctionItem.getLastBidderId(), MoneyManager.ReduceType.Auction, auctionItem.getId());
 
         // 归还失败者，包括成功者之前的暂存区的钱
-        moneyManager.repayMoneyCache(auctionItem.historyBidder, MoneyManager.ReduceType.Auction, auctionItem.getId());
+        moneyManager.repayMoneyCache(auctionItem.bidderHistory.stream().toList(), MoneyManager.ReduceType.Auction, auctionItem.getId());
 
         // 移除竞拍品缓存
         auctionMap.remove(auctionItem.getId());
@@ -221,17 +232,10 @@ public class AuctionManager {
      * 获取所有竞拍品
      */
     public List<AuctionItem> getAllAuction() {
+        // 这里会去遍历所有商品，但是可能读到错误数据，我们可以选择不去处理它，但是需要知道这个问题
+        // 因为可能有一个玩家线程在修改商品属性，但是只修改到一半，这里就开始遍历了，可能会出现
+        // 价格是“最新的”，但是最新的竞拍者不是
         return auctionMap.values().stream()
                 .toList();
-    }
-
-    /**
-     * 刷新列表
-     */
-    public void refresh(HumanObject humanObj) {
-        List<AuctionItem> allAuction = getAllAuction();
-
-        // 发送给客户端
-        humanObj.sendMsg(allAuction);
     }
 }

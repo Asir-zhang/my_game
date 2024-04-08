@@ -4,6 +4,8 @@ import tools.TimeTools;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -32,10 +34,12 @@ public class AuctionItem {
     private String item = "通用竞拍奖励";
     // 竞拍是否完成
     private boolean isFinished = false;
-    // 历史参与的竞拍者
-    public List<Long> historyBidder = new ArrayList<>();
+    // 竞拍是否已经结算
+    private boolean isClosed = false;
+    // 历史参与的竞拍者，改为线程安全队列，因为可能会多线程操作、读去，导致抛出异常
+    public ConcurrentLinkedQueue<Long> bidderHistory = new ConcurrentLinkedQueue<>();   // 这里改为立即归还比较好
 
-    public ReentrantLock lock = new ReentrantLock();
+    public Lock lock = new ReentrantLock();
 
 
     private AuctionItem(long id, long creatorId, double initialPrice, boolean canFixed,
@@ -147,5 +151,13 @@ public class AuctionItem {
 
     public void setFinished(boolean finished) {
         isFinished = finished;
+    }
+
+    public boolean isClosed() {
+        return isClosed;
+    }
+
+    public void setClosed(boolean closed) {
+        isClosed = closed;
     }
 }
