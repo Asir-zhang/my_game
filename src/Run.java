@@ -2,8 +2,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Function;
 
-public class Run {
+public class Run <L, V> {
     static class Task implements Runnable {
         private static final ScopedValue<String> name = ScopedValue.newInstance();
 
