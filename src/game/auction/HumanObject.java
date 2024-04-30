@@ -1,8 +1,14 @@
 package game.auction;
 
+import java.util.concurrent.locks.ReentrantLock;
+
 public class HumanObject {
     private long id;
     private String name;
+    // 所处的公会id
+    public long unionId;
+
+    public ReentrantLock lock = new ReentrantLock();
 
     public long getId() {
         return id;
@@ -20,9 +26,21 @@ public class HumanObject {
         this.name = name;
     }
 
+    public HumanObject() {
+
+    }
+
     public HumanObject(long id, String name) {
         this.id = id;
         this.name = name;
+    }
+
+    public boolean hasUnion() {
+        return unionId > 0;
+    }
+
+    public void setUnion(long unionId) {
+
     }
 
     /**
