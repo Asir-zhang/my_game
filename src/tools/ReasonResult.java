@@ -17,6 +17,10 @@ public class ReasonResult {
         return new ReasonResult(false, reason, args);
     }
 
+    public static ReasonResult failureNoReason() {
+        return new ReasonResult(false, "");
+    }
+
     public String getReason() {
         return reason;
     }
