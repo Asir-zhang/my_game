@@ -10,6 +10,8 @@ public class HumanObject {
 
     public ReentrantLock lock = new ReentrantLock();
 
+    public ReentrantLock unionLock = new ReentrantLock();
+
     public long getId() {
         return id;
     }
