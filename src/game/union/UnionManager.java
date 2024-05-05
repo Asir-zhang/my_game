@@ -4,6 +4,7 @@ import game.auction.HumanObject;
 import tools.ReasonResult;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -143,11 +144,14 @@ public class UnionManager {
         try {
             // 如果不存在某个申请直接返回失败(当然也可以忽略掉,不过也需要同步忽略掉players中的玩家)
             for (long playerId : playerIds) {
-                JoinRequest joinRequest = union.joinRequests.remove(playerId);
+                JoinRequest joinRequest = union.joinRequests.get(playerId);
                 if (joinRequest == null) {
                     return ReasonResult.failure("存在无效的申请");
                 }
-                requests.add(joinRequest);
+            }
+
+            for (long playerId : playerIds) {
+                requests.add(union.joinRequests.remove(playerId));
             }
         } finally {
             union.lock.unlock();
@@ -158,11 +162,11 @@ public class UnionManager {
             for (int i = 0;i < players.size(); i++) {
                 HumanObject player = players.get(i);
                 // 尝试获取5s的锁，如果失败，则有可能遇到死锁
-                boolean b = player.lock.tryLock(5, TimeUnit.SECONDS);
+                boolean b = player.unionLock.tryLock(5, TimeUnit.SECONDS);
                 if (!b) {
                     // 先主动把之前的释放出来
                     for (int j = 0; j < i; j++) {
-                        players.get(j).lock.unlock();
+                        players.get(j).unionLock.unlock();
                     }
                     // 然后i=-1。，从头开始获取锁
                     i = -1;
@@ -171,7 +175,7 @@ public class UnionManager {
                 }
             }
         } catch (InterruptedException e) {
-            // 表示被中断，那么joinRequest处理失败，需要把之前的请求加回去
+            // 被中断，那么joinRequest处理失败，需要把之前的请求加回去
             // 当然也有个问题是上面的remove和这里的put是存在时间窗口的
             // union.joinRequests中可能已经重复请求了，但在正常的时间逻辑中可以被直接覆盖掉
             for (JoinRequest joinRequest : requests) {
