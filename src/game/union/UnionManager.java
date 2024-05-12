@@ -119,99 +119,120 @@ public class UnionManager {
             return ReasonResult.failure("权限不足");
         }
 
-        if (!approve) {
-            // 直接拒绝
-            return ReasonResult.failure("申请被拒绝");
-        }
-
-        // 模拟玩家集合
-        List<HumanObject> players = playerIds.stream()
-                .sorted()
-                .map(_ -> new HumanObject())
-                .toList();
-
         Union union = getUnion(humanObj);
+        // 所有的申请
+        List<JoinRequest> applications = new ArrayList<>();
 
-        // pre判断，尽量避免没有必要的加锁
-        ReasonResult preCheck = approvePreCheck(players);
-        if (!preCheck.result) {
-            return preCheck;
-        }
-
-        List<JoinRequest> requests = new ArrayList<>();
-        // 先获取union锁，因为需要批量拿取joinRequests
+        // 对Union加锁，保证能正确同时取出所有的申请
         union.lock.lock();
         try {
-            // 如果不存在某个申请直接返回失败(当然也可以忽略掉,不过也需要同步忽略掉players中的玩家)
             for (long playerId : playerIds) {
                 JoinRequest joinRequest = union.joinRequests.get(playerId);
-                if (joinRequest == null) {
-                    return ReasonResult.failure("存在无效的申请");
+                if (joinRequest == null || joinRequest.getApproveStatus() == JoinRequest.ApproveStatus.HANDLED) {
+                    return ReasonResult.failure("存在过时的申请，请刷新后重试");
+                }
+                if (joinRequest.getApproveStatus() == JoinRequest.ApproveStatus.HANDLING) {
+                    return ReasonResult.failure("请刷新后重试");
                 }
             }
 
+            // 获取所有请求，同时设置为“审批中”
             for (long playerId : playerIds) {
-                requests.add(union.joinRequests.remove(playerId));
+                JoinRequest joinRequest = union.joinRequests.get(playerId);
+                joinRequest.setApproveStatus(JoinRequest.ApproveStatus.HANDLING);
+                applications.add(joinRequest);
             }
-        } finally {
-            union.lock.unlock();
-        }
 
-        // 一次性按序锁住所有玩家
-        try {
-            for (int i = 0;i < players.size(); i++) {
-                HumanObject player = players.get(i);
-                // 尝试获取5s的锁，如果失败，则有可能遇到死锁
-                boolean b = player.unionLock.tryLock(5, TimeUnit.SECONDS);
-                if (!b) {
-                    // 先主动把之前的释放出来
-                    for (int j = 0; j < i; j++) {
-                        players.get(j).unionLock.unlock();
+            //--------------------------------- 拒绝审批 ---------------------------------
+            if (!approve) {
+                // 直接拒绝
+                // 那么移除所有的申请，由于当前为正在审批状态，所以不会有别的线程修改，直接移除即可
+                for (long playerId : playerIds) {
+                    union.joinRequests.remove(playerId);
+                }
+
+                // 向玩家发送拒绝消息，不在线就不处理了 TODO
+
+                return ReasonResult.SUCCESS;
+            }
+
+
+            //--------------------------------- 通过审批 ---------------------------------
+            // 模拟玩家集合，先排个序，保证取锁顺序
+            List<HumanObject> players = playerIds.stream()
+                    .sorted()
+                    .map(_ -> new HumanObject())
+                    .toList();
+
+            // pre判断，这里简单只判断玩家当前有无帮会
+            for (HumanObject player : players) {
+                if (player.hasUnion()) {
+                    // 先将所有的申请设置为未处理
+                    for (JoinRequest application : applications) {
+                        application.setApproveStatus(JoinRequest.ApproveStatus.UNHANDLED);
                     }
-                    // 然后i=-1。，从头开始获取锁
-                    i = -1;
-                    // 等待一会再试
-                    Thread.sleep(1000);
+                    // 将此申请移除
+                    union.joinRequests.remove(player.getId());
+                    // 返回失败
+                    return ReasonResult.failure("组队申请中有玩家已有帮会");
                 }
             }
-        } catch (InterruptedException e) {
-            // 被中断，那么joinRequest处理失败，需要把之前的请求加回去
-            // 当然也有个问题是上面的remove和这里的put是存在时间窗口的
-            // union.joinRequests中可能已经重复请求了，但在正常的时间逻辑中可以被直接覆盖掉
-            for (JoinRequest joinRequest : requests) {
-                union.joinRequests.put(joinRequest.player, joinRequest);
-            }
-            return ReasonResult.failure("操作失败");
-        }
 
-        // 执行审批逻辑
-        try {
-            // 再次检查
-            preCheck = approvePreCheck(players);
-            if (!preCheck.result) {
-                return preCheck;
-            }
-
-            // 一次性加入
-            for (int i = 0; i < players.size(); i++) {
-                // 简化获取
-                HumanObject player = players.get(i);
-                JoinRequest joinRequest = requests.get(i);
-                long playerId = playerIds.get(i);
-
-                // 默认就是Member
-                union.members.putIfAbsent(playerId, new Member(joinRequest.player, MemberRole.MEMBER));
-                // 设置玩家所属帮会
-                player.setUnion(union.unionId);
-                // 发送审批结果给对应玩家
-            }
-        } finally {
+            // 一次性按序锁住所有玩家
             for (HumanObject player : players) {
-                player.unionLock.unlock();
+                player.unionLock.lock();
             }
-        }
 
-        return ReasonResult.SUCCESS;
+            // 执行审批逻辑
+            try {
+                // 再次检查
+                for (HumanObject player : players) {
+                    if (player.hasUnion()) {
+                        // 先将所有的申请设置为未处理
+                        for (JoinRequest application : applications) {
+                            application.setApproveStatus(JoinRequest.ApproveStatus.UNHANDLED);
+                        }
+                        // 将此申请移除
+                        union.joinRequests.remove(player.getId());
+                        // 返回失败
+                        return ReasonResult.failure("组队申请中有玩家已有帮会");
+                    }
+                }
+
+                // 一次性加入
+                for (int i = 0; i < players.size(); i++) {
+                    // 简化获取
+                    HumanObject player = players.get(i);
+                    JoinRequest joinRequest = applications.get(i);
+                    long playerId = playerIds.get(i);
+
+                    // 默认就是Member
+                    union.members.putIfAbsent(playerId, new Member(joinRequest.player, MemberRole.MEMBER));
+                    // 设置玩家所属帮会
+                    player.setUnion(union.unionId);
+                    // 发送审批结果给对应玩家
+                }
+            } finally {
+                for (HumanObject player : players) {
+                    player.unionLock.unlock();
+                }
+            }
+
+            return ReasonResult.SUCCESS;
+        } catch (Exception e) {
+            // 有异常，那么就把所有申请设置为未处理
+            for (JoinRequest application : applications) {
+                application.setApproveStatus(JoinRequest.ApproveStatus.UNHANDLED);
+            }
+
+            // 返回操作失败
+            return ReasonResult.failure("未知原因，请重试");
+        } finally {
+            // 帮会释放锁
+            union.lock.unlock();
+
+
+        }
     }
 
     private ReasonResult approvePreCheck(List<HumanObject> players) {
